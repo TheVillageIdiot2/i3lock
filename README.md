@@ -1,3 +1,6 @@
+
+I just added the sierpenski fractal to it o it looks cool. I will probably do other stuff as well. Nothing fancy, ehhhh
+
 i3lock - improved screen locker
 ===============================
 i3lock is a simple screen locker like slock. After starting it, you will

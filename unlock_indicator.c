@@ -1,5 +1,4 @@
 /*
- * vim:ts=4:sw=4:expandtab
  *
  * © 2010 Michael Stapelberg
  *
@@ -129,6 +128,7 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
             cairo_pattern_destroy(pattern);
         }
     } else {
+        //Parse input as rgb in 16 bit notation
         char strgroups[3][3] = {{color[0], color[1], '\0'},
                                 {color[2], color[3], '\0'},
                                 {color[4], color[5], '\0'}};
@@ -138,6 +138,7 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
         cairo_set_source_rgb(xcb_ctx, rgb16[0] / 255.0, rgb16[1] / 255.0, rgb16[2] / 255.0);
         cairo_rectangle(xcb_ctx, 0, 0, resolution[0], resolution[1]);
         cairo_fill(xcb_ctx);
+
     }
 
     if (unlock_indicator &&
@@ -310,6 +311,7 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
             cairo_set_source_surface(xcb_ctx, output, x, y);
             cairo_rectangle(xcb_ctx, x, y, button_diameter_physical, button_diameter_physical);
             cairo_fill(xcb_ctx);
+            sketch_bg(xcb_ctx, xr_resolutions[screen].width, xr_resolutions[screen].height);
         }
     } else {
         /* We have no information about the screen sizes/positions, so we just
@@ -320,6 +322,8 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
         cairo_set_source_surface(xcb_ctx, output, x, y);
         cairo_rectangle(xcb_ctx, x, y, button_diameter_physical, button_diameter_physical);
         cairo_fill(xcb_ctx);
+        sketch_bg(xcb_ctx, last_resolution[0], last_resolution[1]);
+        puts("Using last resolution\n");
     }
 
     cairo_surface_destroy(xcb_output);
@@ -328,6 +332,99 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
     cairo_destroy(xcb_ctx);
     return bg_pixmap;
 }
+
+void koch(cairo_t *ct, float x, float y, float distance, float angle, int level)
+{
+    float deg60 = M_PI/3;
+    //First two xy are of course the base of the line
+    
+    //"Left" vertex triangle
+    float x2 = x + (distance / 3) * cos(angle);
+    float y2 = y + (distance / 3) * sin(angle);
+
+    //Peak of triangle
+    float x3 = x2 + (distance / 3) * cos(angle + deg60);
+    float y3 = y2 + (distance / 3) * sin(angle + deg60);
+
+    //"Right" vertex triangle
+    float x4 = x + (2 * distance / 3) * cos(angle);
+    float y4 = y + (2 * distance / 3) * sin(angle);
+
+    //End of the line
+    float x5 = x + (distance) * cos(angle);
+    float y5 = y + (distance) * sin(angle);
+
+    if(level <= 0)
+    {
+        cairo_move_to(ct, x, y);
+        cairo_line_to(ct, x5, y5);
+
+        cairo_set_source_rgb(ct, 0, 0, 0);
+        cairo_set_line_width(ct, 1);
+        cairo_stroke(ct);
+    }
+    else
+    {
+        //Do first third of line
+        koch(ct, x, y, distance / 3, angle, level - 1);
+
+        //Do left side of triangle
+        koch(ct, x2, y2, distance / 3, angle + deg60, level - 1);
+        
+        //Do right side of triangle
+        koch(ct, x3, y3, distance / 3, angle - deg60, level - 1);
+
+        //Do last third of line
+        koch(ct, x4, y4, distance / 3, angle, level - 1);
+    }
+}
+
+void sketch_bg(cairo_t *xcb_ct, int width, int height)
+{
+    int levels = input_position / 2;
+    if(levels > 5)
+        levels = 5;
+
+    //Top
+    koch(xcb_ct, 0, 0, width/2, 0, levels);
+    koch(xcb_ct, width/2, 0, width/2, 0, levels);
+    //Bot
+    koch(xcb_ct, width, height, width, M_PI, levels);
+    //koch(xcb_ct, width, height, width, M_PI, levels));
+    //Left
+    koch(xcb_ct, 0, height, height, -M_PI/2, levels);
+    //Right
+    koch(xcb_ct, width, 0, height, M_PI/2, levels);
+}
+
+//Bezeir curves
+/*
+void sketch_bg(cairo_t *xcb_ctx, int width, int height)
+{
+    float x=0;
+    float y=0;
+    const int count = 4 << (input_position);
+    float x_incr = ((float)width)/count;
+    float y_incr = ((float)height)/count;
+
+    for(int i=0; i<count; i++)
+    {
+        x += x_incr;
+        y += y_incr;
+        cairo_set_source_rgb(xcb_ctx, 0, 0, 0);
+
+        cairo_move_to(xcb_ctx, x      ,0);//Along top
+        cairo_line_to(xcb_ctx, width  ,y);//Along right
+        cairo_line_to(xcb_ctx, width-x,height);//Along bottom
+        cairo_line_to(xcb_ctx, 0      ,height-y);//Along left
+        cairo_line_to(xcb_ctx, x      ,0);//Back to top
+
+        cairo_set_line_width(xcb_ctx, 1);
+        cairo_stroke(xcb_ctx);
+    }
+}
+*/
+
 
 /*
  * Calls draw_image on a new pixmap and swaps that with the current pixmap
